@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Groomly - Pet Grooming Price Estimator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 2rem;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 0.5rem;
+      font-size: 2rem;
+      text-align: center;
+    }
+
+    .subtitle {
+      color: #666;
+      text-align: center;
+      margin-bottom: 2rem;
+      font-size: 0.95rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      transition: border-color 0.3s;
+      font-family: inherit;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+      background-color: #f9f9f9;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 500px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .button-group button {
+      margin-top: 0;
+      background: #667eea;
+      font-size: 0.85rem;
+      padding: 0.6rem;
+    }
+
+    .button-group button:hover {
+      background: #764ba2;
+    }
+
+    .results {
+      margin-top: 2rem;
+      padding: 1.5rem;
+      background: #f9f9f9;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .results h2 {
+      color: #333;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+    }
+
+    .price-box {
+      background: white;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      border: 2px solid #667eea;
+    }
+
+    .price-range {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .confidence {
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+
+    .notes {
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      font-style: italic;
+    }
+
+    .groomers-section {
+      margin-top: 2rem;
+    }
+
+    .groomers-section h3 {
+      color: #333;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+
+    .groomer-card {
+      background: white;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+      border: 1px solid #e0e0e0;
+      transition: box-shadow 0.2s;
+    }
+
+    .groomer-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .groomer-name {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 0.3rem;
+    }
+
+    .groomer-address {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .groomer-rating {
+      color: #f39c12;
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .groomer-distance {
+      color: #667eea;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .error {
+      color: #e74c3c;
+      background: #fadbd8;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-top: 1rem;
+    }
+
+    .loading {
+      text-align: center;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 2rem 0;
+    }
+
+    .location-section {
+      background: #f0f4ff;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-top: 2rem;
+    }
+
+    .location-section h3 {
+      color: #333;
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+
+    /* simple spinner */
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid rgba(0,0,0,0.08);
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      color:#667eea;
+      font-weight:600;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🐾 Groomly</h1>
+  <p class="subtitle">AI-Powered Pet Grooming Price Estimator</p>
+
+  <form id="priceForm">
+    <div class="form-group">
+      <label for="address">Street address</label>
+      <input type="text" id="address" placeholder="e.g., 123 Main St" />
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="zip">Zip Code</label>
+        <input type="text" id="zip" placeholder="e.g., 98101" />
+      </div>
+      <div class="form-group">
+        <label for="locationFallback">City, State (optional)</label>
+        <input type="text" id="locationFallback" placeholder="e.g., Seattle, WA" />
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="type">Pet Type</label>
+        <select id="type" required>
+          <option value="">Select a pet type</option>
+          <option value="dog">🐕 Dog</option>
+          <option value="cat">🐱 Cat</option>
+          <option value="lizard">🦎 Lizard</option>
+          <option value="rabbit">🐰 Rabbit</option>
+          <option value="bird">🦜 Bird</option>
+          <option value="hamster">🐹 Hamster</option>
+          <option value="fish">🐟 Fish</option>
+          <option value="amphibian">🐸 Amphibian</option>
+          <option value="snake">🐍 Snake</option>
+          <option value="tortoise">🐢 Tortoise</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="size">Pet Size</label>
+        <select id="size" required>
+          <option value="">Select a size</option>
+          <option value="tiny">Tiny</option>
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+          <option value="x-large">X-Large</option>
+        </select>
+      </div>
+    </div>
+
+    <button type="submit">Get Price Estimate</button>
+  </form>
+
+  <div id="result"></div>
+
+  <div class="location-section">
+    <h3>📍 Find Nearby Groomers</h3>
+    <div class="form-group">
+      <label for="userAddress">Your Address (for distance calculation)</label>
+      <input type="text" id="userAddress" placeholder="e.g., 123 My St, Seattle, WA" />
+    </div>
+
+    <div class="button-group">
+      <button id="useLocationBtn">📍 Use My Location</button>
+      <button id="calcDistancesBtn">📏 Calculate Distances</button>
+    </div>
+  </div>
+
+  <div id="groomerSection" style="display:none" class="groomers-section">
+    <h3>Groomers Near You</h3>
+    <div id="groomerList"></div>
+  </div>
+</div>
+
+<script>
+  // relative API base by default. When developing locally, this falls back to localhost.
+  function getApiBase() {
+    // If you deploy with a Cloudflare Worker or Pages serving the frontend + proxy, use relative '/api'
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      return "http://localhost:5000";
+    }
+    return ""; // relative path -> '/api/price' becomes '/api/price' on your deployed domain or worker
+  }
+  const API_BASE = getApiBase();
+
+  const form = document.getElementById("priceForm");
+  const resultDiv = document.getElementById("result");
+  const groomerSection = document.getElementById("groomerSection");
+  const groomerList = document.getElementById("groomerList");
+  const userAddressInput = document.getElementById("userAddress");
+  const useLocationBtn = document.getElementById("useLocationBtn");
+  const calcBtn = document.getElementById("calcDistancesBtn");
+
+  let lastGroomers = [];
+  let userCoords = null;
+
+  function showLoading(message = "Loading...") {
+    resultDiv.innerHTML = `<div class="status"><span class="spinner"></span><span>${message}</span></div>`;
+  }
+  function showError(msg) {
+    resultDiv.innerHTML = `<div class="error">${escapeHtml(msg)}</div>`;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showLoading("Estimating price...");
+    groomerSection.style.display = "none";
+    groomerList.innerHTML = "";
+    userCoords = null;
+
+    const address = document.getElementById("address").value.trim();
+    const zip = document.getElementById("zip").value.trim();
+    const locationFallback = document.getElementById("locationFallback").value.trim();
+    const type = document.getElementById("type").value;
+    const size = document.getElementById("size").value;
+
+    // Build location to send to backend: prefer address + zip, fall back to city/state
+    const payloadLocation = (address || "") + (zip ? " " + zip : "") || locationFallback || "";
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/price`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ address, zip, location: payloadLocation, type, size })
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(()=>({ error: "Unknown error" }));
+        return showError("Error: " + JSON.stringify(errData));
+      }
+
+      const data = await resp.json();
+      const price = data.price;
+      // show radius used info if present
+      const radiusInfo = data.radiusMilesUsed ? `Search radius used: ${data.radiusMilesUsed} miles` : "";
+      resultDiv.innerHTML = `
+        <div class="results">
+          <h2>Price Estimate</h2>
+          <div class="price-box">
+            <div class="price-range">$${price.min ?? "N/A"} - $${price.max ?? "N/A"} ${price.currency || "USD"}</div>
+            <div class="confidence">Confidence: <strong>${price.confidence}</strong></div>
+            <div class="notes">${escapeHtml(price.notes || "")}</div>
+            <div class="notes">${escapeHtml(radiusInfo)}</div>
+          </div>
+        </div>
+      `;
+
+      lastGroomers = data.groomers || [];
+      sortAndRenderGroomers();
+      groomerSection.style.display = "block";
+    } catch (err) {
+      showError("Request failed: " + (err?.message || err));
+    }
+  });
+
+  useLocationBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!navigator.geolocation) return alert("Geolocation not supported.");
+    showLoading("Capturing location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        userCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        userAddressInput.value = "Current location (captured)";
+        sortAndRenderGroomers();
+      },
+      (err) => {
+        showError("Geolocation error: " + err.message);
+      },
+      { timeout: 10000 }
+    );
+  });
+
+  calcBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    if (!lastGroomers.length) return alert("No groomers available. Get a price estimate first.");
+    if (userCoords) return sortAndRenderGroomers();
+
+    const addr = userAddressInput.value.trim();
+    if (!addr) return alert("Enter your address or use current location.");
+
+    showLoading("Calculating distances...");
+    try {
+      const geoResp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`, { headers: { "Accept-Language": "en-US" }});
+      const geoJson = await geoResp.json();
+      if (!Array.isArray(geoJson) || geoJson.length === 0) {
+        return showError("Could not geocode your address.");
+      }
+      userCoords = { lat: parseFloat(geoJson[0].lat), lng: parseFloat(geoJson[0].lon) };
+      sortAndRenderGroomers();
+    } catch (err) {
+      showError("Geocoding failed: " + (err?.message || err));
+    }
+  });
+
+  function sortAndRenderGroomers() {
+    if (userCoords) {
+      lastGroomers.forEach(g => {
+        if (g.lat != null && g.lng != null) g.distanceKm = haversine(userCoords.lat, userCoords.lng, g.lat, g.lng);
+        else g.distanceKm = null;
+      });
+      lastGroomers.sort((a,b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+    }
+    renderGroomers(lastGroomers);
+    groomerSection.style.display = "block";
+  }
+
+  function renderGroomers(grooms) {
+    groomerList.innerHTML = "";
+    if (!grooms || grooms.length === 0) {
+      groomerList.innerHTML = '<div class="error">No groomers found for that location.</div>';
+      return;
+    }
+    grooms.forEach(g => {
+      const div = document.createElement("div");
+      div.className = "groomer-card";
+
+      let distanceText = "Distance: unknown";
+      if (g.distanceKm != null) {
+        const dMiles = g.distanceKm * 0.621371;
+        distanceText = `Distance: ${g.distanceKm.toFixed(2)} km (${dMiles.toFixed(1)} mi)`;
+      }
+
+      const servicesText = (Array.isArray(g.services) && g.services.length) ? escapeHtml(g.services.join(", ")) : (g.service_match ? "Unknown (likely serves your pet)" : "May not serve your pet");
+
+      const mapLink = g.address
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(g.address)}`
+        : (g.lat != null && g.lng != null ? `https://www.google.com/maps/search/?api=1&query=${g.lat},${g.lng}` : null);
+
+      const destinationParam = g.address ? encodeURIComponent(g.address) : (g.lat != null && g.lng != null ? `${g.lat},${g.lng}` : null);
+      const originParam = (userCoords && userCoords.lat && userCoords.lng)
+        ? `${userCoords.lat},${userCoords.lng}`
+        : (userAddressInput.value && userAddressInput.value !== "Current location (captured)" ? encodeURIComponent(userAddressInput.value) : null);
+      const directionsLink = destinationParam
+        ? `https://www.google.com/maps/dir/?api=1&destination=${destinationParam}` + (originParam ? `&origin=${originParam}` : "")
+        : null;
+
+      div.innerHTML = `
+        <div class="groomer-card-header">
+          <div class="groomer-name">${escapeHtml(g.name)}</div>
+          ${g.rating ? `<div class="groomer-rating">⭐ ${g.rating}</div>` : ""}
+        </div>
+        <div class="groomer-address">📍 ${escapeHtml(g.address || "Address not available")}</div>
+        ${g.phone ? `<div class="groomer-phone">📞 ${escapeHtml(g.phone)}</div>` : ""}
+        ${g.hours ? `<div class="groomer-hours">🕒 ${escapeHtml(g.hours)}</div>` : ""}
+        ${g.website ? `<div class="groomer-website"><a href="${escapeHtml(g.website)}" target="_blank" rel="noopener">🌐 Visit Website</a></div>` : ""}
+        <div class="groomer-services"><strong>Services:</strong> ${servicesText}</div>
+        <div class="groomer-distance">${distanceText}</div>
+        <div style="margin-top:10px">
+          ${mapLink ? `<a href="${mapLink}" target="_blank" rel="noopener">View on Google Maps</a>` : ""}
+          ${directionsLink ? ` <span>•</span> <a href="${directionsLink}" target="_blank" rel="noopener">Get directions</a>` : ""}
+        </div>
+      `;
+      groomerList.appendChild(div);
+    });
+  }
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const toRad = x => (x * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  }
+</script>
+</body>
+</html>

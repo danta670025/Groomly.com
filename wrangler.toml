@@ -1,0 +1,1 @@
+name = "groomly-api" main = "server.js" compatibility_date = "2025-01-15" [env.production] route = "api.groomly.example.com/*" zone_id = "YOUR_ZONE_ID" [build] command = "npm install" [[routes]] pattern = "*/api/*" zone_name = "groomly.example.com"
