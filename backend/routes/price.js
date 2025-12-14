@@ -73,8 +73,14 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 async function geocodeLocation(location) {
+  console.log("=== GEOCODE START ===");
+  console.log("Attempting to geocode location:", location);
+  
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`;
+    console.log("Request URL:", url);
+    console.log("Making request to Nominatim...");
+    
     const resp = await axios.get(url, {
       headers: {
         "User-Agent": "Groomly/1.0 (https://groomly.onrender.com; dante@groomly.com)",
@@ -85,6 +91,7 @@ async function geocodeLocation(location) {
     });
     
     console.log("Geocode response status:", resp.status);
+    console.log("Geocode response data:", JSON.stringify(resp.data).substring(0, 200));
     console.log("Geocode response data length:", resp.data?.length);
     
     const res0 = resp.data?.[0];
@@ -94,14 +101,23 @@ async function geocodeLocation(location) {
     }
     
     console.log("Geocoded successfully:", res0.display_name);
+    console.log("=== GEOCODE SUCCESS ===");
     return { 
       lat: parseFloat(res0.lat), 
       lng: parseFloat(res0.lon), 
       formatted: res0.display_name || location 
     };
   } catch (err) {
+    console.error("=== GEOCODE ERROR ===");
     console.error("Geocode error for location:", location);
-    console.error("Error details:", err?.response?.status, err?.response?.statusText, err?.message);
+    console.error("Error type:", err?.constructor?.name);
+    console.error("Error message:", err?.message);
+    console.error("Error code:", err?.code);
+    console.error("Response status:", err?.response?.status);
+    console.error("Response statusText:", err?.response?.statusText);
+    console.error("Response data:", JSON.stringify(err?.response?.data));
+    console.error("Full error:", err);
+    console.error("=== GEOCODE ERROR END ===");
     throw err;
   }
 }
@@ -132,12 +148,16 @@ function generatePhoneNumber() {
 }
 
 async function fetchNearbyGroomers(locationString, petType) {
-  console.log("fetchNearbyGroomers called with:", locationString, petType);
+  console.log("=== FETCH NEARBY GROOMERS START ===");
+  console.log("Location string:", locationString);
+  console.log("Pet type:", petType);
   
   try {
     // Get coordinates for the user's location
+    console.log("Calling geocodeLocation...");
     const center = await geocodeLocation(locationString);
     console.log("Center coordinates:", center.lat, center.lng);
+    console.log("Center formatted address:", center.formatted);
     
     const radiiMiles = [10, 20, 30, 40];
     let foundResults = [];
