@@ -1,4 +1,23 @@
-node_modules/
+# Environment variables (NEVER commit API keys!)
 .env
-.DS_Store
+backend/.env
+*.env
+
+# Node modules
+node_modules/
+backend/node_modules/
+
+# Logs
+logs
 *.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo

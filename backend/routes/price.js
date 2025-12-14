@@ -72,79 +72,107 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+// NEW: Geocode using Geocodio (works on Render, free tier available)
 async function geocodeLocation(location) {
   console.log("=== GEOCODE START ===");
   console.log("Attempting to geocode location:", location);
   
+  const geocodioKey = process.env.GEOCODIO_API_KEY;
+  
+  if (!geocodioKey) {
+    console.error("GEOCODIO_API_KEY not set in environment");
+    throw new Error("Geocoding API key not configured");
+  }
+  
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`;
-    console.log("Request URL:", url);
-    console.log("Making request to Nominatim...");
+    const url = `https://api.geocod.io/v1.7/geocode?q=${encodeURIComponent(location)}&api_key=${geocodioKey}`;
+    console.log("Request URL:", url.replace(geocodioKey, 'API_KEY_HIDDEN'));
     
-    const resp = await axios.get(url, {
-      headers: {
-        "User-Agent": "Groomly/1.0 (https://groomly.onrender.com; dante@groomly.com)",
-        "Accept": "application/json",
-        "Accept-Language": "en-US,en;q=0.9"
-      },
-      timeout: 15000
-    });
+    const resp = await axios.get(url, { timeout: 10000 });
     
-    console.log("Geocode response status:", resp.status);
-    console.log("Geocode response data:", JSON.stringify(resp.data).substring(0, 200));
-    console.log("Geocode response data length:", resp.data?.length);
+    console.log("Geocodio response status:", resp.status);
+    console.log("Geocodio results count:", resp.data?.results?.length);
     
-    const res0 = resp.data?.[0];
-    if (!res0) {
-      console.error("Geocode returned no results for:", location);
-      throw new Error("Geocode returned no results for location: " + location);
+    const result = resp.data?.results?.[0];
+    if (!result) {
+      console.error("Geocodio returned no results for:", location);
+      throw new Error("Address not found: " + location);
     }
     
-    console.log("Geocoded successfully:", res0.display_name);
+    const lat = result.location.lat;
+    const lng = result.location.lng;
+    const formatted = result.formatted_address;
+    
+    console.log("Geocoded successfully:", formatted);
+    console.log("Coordinates:", lat, lng);
     console.log("=== GEOCODE SUCCESS ===");
-    return { 
-      lat: parseFloat(res0.lat), 
-      lng: parseFloat(res0.lon), 
-      formatted: res0.display_name || location 
-    };
+    
+    return { lat, lng, formatted };
   } catch (err) {
     console.error("=== GEOCODE ERROR ===");
-    console.error("Geocode error for location:", location);
     console.error("Error type:", err?.constructor?.name);
     console.error("Error message:", err?.message);
-    console.error("Error code:", err?.code);
     console.error("Response status:", err?.response?.status);
-    console.error("Response statusText:", err?.response?.statusText);
     console.error("Response data:", JSON.stringify(err?.response?.data));
-    console.error("Full error:", err);
     console.error("=== GEOCODE ERROR END ===");
     throw err;
   }
 }
 
-const REALISTIC_GROOMER_NAMES = [
-  "Pampered Paws Grooming",
-  "Happy Tails Pet Salon",
-  "Fur & Feather Care",
-  "Pawsitive Grooming Studio",
-  "The Grooming Lab",
-  "Bark & Bubble Pet Spa",
-  "Elegant Paws Boutique",
-  "Tail Waggers Grooming",
-  "Premium Pet Grooming Co.",
-  "Fluffy Friends Salon",
-  "Noble Hound Grooming",
-  "Sunshine Pet Care",
-  "Pristine Paws Professional Grooming",
-  "The Pet Parlor",
-  "Royal Pet Grooming"
-];
-
-function generatePhoneNumber() {
-  const areaCode = Math.floor(Math.random() * 900) + 200;
-  const exchange = Math.floor(Math.random() * 900) + 200;
-  const number = Math.floor(Math.random() * 9000) + 1000;
-  return `(${areaCode}) ${exchange}-${number}`;
+// NEW: Search for real groomers using Google Places API
+async function searchRealGroomers(lat, lng, petType, radiusMiles) {
+  console.log(`Searching for real groomers within ${radiusMiles} miles of ${lat},${lng}`);
+  
+  const googleKey = process.env.GOOGLE_PLACES_API_KEY;
+  
+  if (!googleKey) {
+    console.warn("GOOGLE_PLACES_API_KEY not set, skipping real groomer search");
+    return [];
+  }
+  
+  try {
+    const radiusMeters = radiusMiles * 1609.34; // Convert miles to meters
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&type=pet_store&keyword=pet grooming ${petType}&key=${googleKey}`;
+    
+    console.log("Google Places API request (radius:", radiusMiles, "miles)");
+    
+    const resp = await axios.get(url, { timeout: 10000 });
+    
+    if (resp.data?.status !== "OK" && resp.data?.status !== "ZERO_RESULTS") {
+      console.error("Google Places API error:", resp.data?.status, resp.data?.error_message);
+      return [];
+    }
+    
+    const places = resp.data?.results || [];
+    console.log(`Google Places returned ${places.length} results`);
+    
+    const groomers = places.map(p => {
+      const distKm = haversineKm(lat, lng, p.geometry.location.lat, p.geometry.location.lng);
+      return {
+        name: p.name,
+        address: p.vicinity || p.formatted_address,
+        place_id: p.place_id,
+        lat: p.geometry.location.lat,
+        lng: p.geometry.location.lng,
+        rating: p.rating || null,
+        phone: null, // Would need Place Details API call
+        hours: p.opening_hours?.open_now ? "Open now" : null,
+        website: null,
+        types: p.types || [],
+        services: [petType],
+        service_match: true,
+        distanceKm: distKm,
+        source: "google-places"
+      };
+    });
+    
+    return groomers;
+  } catch (err) {
+    console.error("Google Places API error:", err?.message);
+    console.error("Response status:", err?.response?.status);
+    console.error("Response data:", JSON.stringify(err?.response?.data));
+    return [];
+  }
 }
 
 async function fetchNearbyGroomers(locationString, petType) {
@@ -152,93 +180,90 @@ async function fetchNearbyGroomers(locationString, petType) {
   console.log("Location string:", locationString);
   console.log("Pet type:", petType);
   
-  let center = null;
-  let mockMode = false;
-  
   try {
-    // Try to get coordinates for the user's location
-    console.log("Attempting to geocode location...");
-    center = await geocodeLocation(locationString);
-    console.log("Center coordinates:", center.lat, center.lng);
-    console.log("Center formatted address:", center.formatted);
-  } catch (geoErr) {
-    // Geocoding failed - use approximate coordinates based on location string
-    console.warn("Geocoding failed, using mock coordinates");
-    mockMode = true;
+    // Step 1: Geocode the user's address to get coordinates
+    const center = await geocodeLocation(locationString);
+    console.log("User location:", center.formatted);
+    console.log("Coordinates:", center.lat, center.lng);
     
-    // Try to extract zip code and use approximate US center coordinates
-    const zipMatch = locationString.match(/\b\d{5}\b/);
-    if (zipMatch) {
-      const zip = zipMatch[0];
-      // Approximate lat/lng for different regions based on first digit of zip
-      const firstDigit = parseInt(zip[0]);
-      const regionCoords = {
-        0: { lat: 41.8, lng: -71.4 }, // New England
-        1: { lat: 40.7, lng: -74.0 }, // NY area
-        2: { lat: 38.9, lng: -77.0 }, // DC area  
-        3: { lat: 33.7, lng: -84.4 }, // Atlanta area
-        4: { lat: 38.2, lng: -85.7 }, // Louisville area
-        5: { lat: 41.8, lng: -87.6 }, // Chicago area
-        6: { lat: 38.6, lng: -90.2 }, // St Louis area
-        7: { lat: 32.8, lng: -96.8 }, // Dallas area
-        8: { lat: 39.7, lng: -104.9 }, // Denver area
-        9: { lat: 37.8, lng: -122.4 }  // SF area
-      };
-      center = regionCoords[firstDigit] || { lat: 39.8, lng: -98.6 }; // US center default
-      center.formatted = locationString;
-    } else {
-      // No zip code, use US geographic center
-      center = { lat: 39.8, lng: -98.6, formatted: locationString };
+    // Step 2: Search for real groomers at increasing radii
+    const radiiMiles = [10, 20, 30, 40];
+    let allGroomers = [];
+    let radiusUsed = null;
+    
+    for (const miles of radiiMiles) {
+      const groomers = await searchRealGroomers(center.lat, center.lng, petType, miles);
+      
+      if (groomers.length > 0) {
+        allGroomers = allGroomers.concat(groomers);
+        radiusUsed = miles;
+        console.log(`Found ${groomers.length} groomers at ${miles} miles`);
+        
+        // If we have enough results, stop searching
+        if (allGroomers.length >= 10) break;
+      }
+      
+      // Add delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    console.log("Using mock center coordinates:", center.lat, center.lng);
-  }
-
-  // Always generate mock groomers since Nominatim search is also blocked
-  console.log("Generating realistic mock groomers...");
-  const foundResults = [];
-  const baseLat = center.lat;
-  const baseLng = center.lng;
-  
-  // Create more spread out mock locations
-  const offsets = [
-    [0.01, 0.01], [-0.015, 0.008], [0.008, -0.012], 
-    [0.012, 0.015], [-0.02, -0.005], [0.018, 0.002], 
-    [-0.008, 0.018], [0.022, -0.010], [-0.012, 0.022],
-    [0.005, -0.018], [-0.025, 0.012], [0.015, 0.020]
-  ];
-  
-  for (let i = 0; i < Math.min(offsets.length, 12); i++) {
-    const lat = baseLat + offsets[i][0];
-    const lng = baseLng + offsets[i][1];
-    const realName = REALISTIC_GROOMER_NAMES[i % REALISTIC_GROOMER_NAMES.length];
-    const distKm = haversineKm(baseLat, baseLng, lat, lng);
-    const distMiles = distKm * 0.621371;
     
-    foundResults.push({
-      name: realName,
-      address: `${100 + (i * 25)} ${['Main St', 'Oak Ave', 'Elm Blvd', 'Maple Dr', 'Pine Rd', 'Cedar Ln'][i % 6]}, ${center.formatted}`,
-      place_id: null,
-      lat,
-      lng,
-      rating: +(3.8 + Math.random() * 1.2).toFixed(1),
-      phone: generatePhoneNumber(),
-      hours: "Mon-Fri 9AM-6PM, Sat 10AM-4PM, Closed Sun",
-      website: null,
-      types: ["pet_groomer"],
-      services: [petType],
-      service_match: true,
-      distanceKm: distKm,
-      source: mockMode ? "mock-geocode-failed" : "mock"
-    });
+    // Step 3: If no real groomers found, generate realistic mock data
+    if (allGroomers.length === 0) {
+      console.log("No real groomers found, generating mock data");
+      const offsets = [
+        [0.01, 0.01], [-0.015, 0.008], [0.008, -0.012], 
+        [0.012, 0.015], [-0.02, -0.005], [0.018, 0.002], 
+        [-0.008, 0.018], [0.022, -0.010]
+      ];
+      
+      for (let i = 0; i < offsets.length; i++) {
+        const lat = center.lat + offsets[i][0];
+        const lng = center.lng + offsets[i][1];
+        const realName = REALISTIC_GROOMER_NAMES[i % REALISTIC_GROOMER_NAMES.length];
+        const distKm = haversineKm(center.lat, center.lng, lat, lng);
+        
+        allGroomers.push({
+          name: realName,
+          address: `${100 + (i * 25)} ${['Main St', 'Oak Ave', 'Elm Blvd', 'Maple Dr'][i % 4]}, near ${center.formatted}`,
+          place_id: null,
+          lat,
+          lng,
+          rating: +(3.8 + Math.random() * 1.2).toFixed(1),
+          phone: generatePhoneNumber(),
+          hours: "Mon-Fri 9AM-6PM, Sat 10AM-4PM",
+          website: null,
+          types: ["pet_groomer"],
+          services: [petType],
+          service_match: true,
+          distanceKm: distKm,
+          source: "mock"
+        });
+      }
+      radiusUsed = 20;
+    }
+    
+    // Remove duplicates and sort by distance
+    const unique = [];
+    const seen = new Set();
+    for (const g of allGroomers) {
+      const key = g.place_id || `${g.lat},${g.lng}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(g);
+    }
+    
+    unique.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+    
+    console.log("Returning", unique.length, "groomers");
+    console.log("=== FETCH NEARBY GROOMERS END ===");
+    
+    return { groomers: unique.slice(0, 12), radiusMilesUsed: radiusUsed };
+    
+  } catch (err) {
+    console.error("fetchNearbyGroomers failed:", err?.message);
+    console.error("Stack trace:", err?.stack);
+    return { groomers: [], radiusMilesUsed: null };
   }
-  
-  // Sort by distance
-  foundResults.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-  
-  console.log("Generated", foundResults.length, "mock groomers");
-  console.log("=== FETCH NEARBY GROOMERS END ===");
-  
-  return { groomers: foundResults, radiusMilesUsed: 20 };
 }
 
 const ALLOWED_TYPES = ["dog", "cat", "lizard", "rabbit", "bird", "other", "hamster", "fish", "amphibian", "snake", "tortoise"];
