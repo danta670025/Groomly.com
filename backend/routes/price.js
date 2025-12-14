@@ -3,10 +3,10 @@ import axios from "axios";
 
 const router = express.Router();
 
-// Simple in-memory rate limiter (per-IP)
+// Rate limiter
 const rateLimitMap = new Map();
-const WINDOW_MS = 60 * 60 * 1000;
-const MAX_REQUESTS_PER_WINDOW = 60;
+const WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || "3600000", 10);
+const MAX_REQUESTS_PER_WINDOW = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "60", 10);
 
 function rateLimiter(req, res, next) {
   try {
@@ -40,6 +40,28 @@ function rateLimiter(req, res, next) {
   }
 }
 
+// Concurrency limiter for LLM calls
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_LLM_CALLS || "5", 10);
+let activeLLMCalls = 0;
+const llmQueue = [];
+
+async function acquireLLMSlot() {
+  if (activeLLMCalls < MAX_CONCURRENT) {
+    activeLLMCalls++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => llmQueue.push(resolve));
+}
+
+function releaseLLMSlot() {
+  activeLLMCalls--;
+  if (llmQueue.length > 0) {
+    const next = llmQueue.shift();
+    activeLLMCalls++;
+    next();
+  }
+}
+
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const toRad = x => (x * Math.PI) / 180;
@@ -50,27 +72,40 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Nominatim with proper headers to avoid 403
 async function geocodeLocation(location) {
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`;
     const resp = await axios.get(url, {
       headers: {
-        "User-Agent": "Groomly/1.0 (https://groomly.local; contact@groomly.local)",
-        "Accept": "application/json"
+        "User-Agent": "Groomly/1.0 (https://groomly.onrender.com; dante@groomly.com)",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9"
       },
-      timeout: 10000
+      timeout: 15000
     });
+    
+    console.log("Geocode response status:", resp.status);
+    console.log("Geocode response data length:", resp.data?.length);
+    
     const res0 = resp.data?.[0];
-    if (!res0) throw new Error("Geocode returned no results");
-    return { lat: parseFloat(res0.lat), lng: parseFloat(res0.lon), formatted: res0.display_name || location };
+    if (!res0) {
+      console.error("Geocode returned no results for:", location);
+      throw new Error("Geocode returned no results for location: " + location);
+    }
+    
+    console.log("Geocoded successfully:", res0.display_name);
+    return { 
+      lat: parseFloat(res0.lat), 
+      lng: parseFloat(res0.lon), 
+      formatted: res0.display_name || location 
+    };
   } catch (err) {
-    console.error("Geocode error:", err?.message || err);
+    console.error("Geocode error for location:", location);
+    console.error("Error details:", err?.response?.status, err?.response?.statusText, err?.message);
     throw err;
   }
 }
 
-// List of realistic pet groomer business names for fallback
 const REALISTIC_GROOMER_NAMES = [
   "Pampered Paws Grooming",
   "Happy Tails Pet Salon",
@@ -89,7 +124,6 @@ const REALISTIC_GROOMER_NAMES = [
   "Royal Pet Grooming"
 ];
 
-// Realistic phone number generator (fallback)
 function generatePhoneNumber() {
   const areaCode = Math.floor(Math.random() * 900) + 200;
   const exchange = Math.floor(Math.random() * 900) + 200;
@@ -98,8 +132,13 @@ function generatePhoneNumber() {
 }
 
 async function fetchNearbyGroomers(locationString, petType) {
+  console.log("fetchNearbyGroomers called with:", locationString, petType);
+  
   try {
+    // Get coordinates for the user's location
     const center = await geocodeLocation(locationString);
+    console.log("Center coordinates:", center.lat, center.lng);
+    
     const radiiMiles = [10, 20, 30, 40];
     let foundResults = [];
     let radiusUsed = null;
@@ -108,14 +147,21 @@ async function fetchNearbyGroomers(locationString, petType) {
       try {
         const query = `${petType} groomer near ${locationString}`;
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=50`;
+        
+        console.log(`Searching radius ${miles} miles with query:`, query);
+        
         const resp = await axios.get(url, {
           headers: {
-            "User-Agent": "Groomly/1.0 (https://groomly.local; contact@groomly.local)",
-            "Accept": "application/json"
+            "User-Agent": "Groomly/1.0 (https://groomly.onrender.com; dante@groomly.com)",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9"
           },
-          timeout: 10000
+          timeout: 15000
         });
+        
         const places = resp.data || [];
+        console.log(`Nominatim returned ${places.length} places for radius ${miles} miles`);
+        
         const results = [];
 
         for (const p of places) {
@@ -128,23 +174,12 @@ async function fetchNearbyGroomers(locationString, petType) {
               const parts = displayName.split(",");
               let name = parts[0]?.trim() || `${petType} groomer`;
 
-              // Try to fetch extra OSM details (phone, hours, website)
               let phone = null;
               let hours = null;
               let website = null;
-              try {
-                const detailUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
-                const detResp = await axios.get(detailUrl, {
-                  headers: { "User-Agent": "Groomly/1.0 (https://groomly.local; contact@groomly.local)" },
-                  timeout: 5000
-                });
-                const extraTags = detResp.data?.extratags || {};
-                phone = extraTags.phone || null;
-                hours = extraTags.opening_hours || null;
-                website = extraTags.website || null;
-              } catch (e) {
-                // ignore detail fetch failures
-              }
+              
+              // Skip detailed lookup for now to avoid rate limiting
+              // Can be re-enabled later with proper rate limiting
 
               const address = displayName;
               const combined = `${name} ${address}`.toLowerCase();
@@ -175,27 +210,38 @@ async function fetchNearbyGroomers(locationString, petType) {
           foundResults = foundResults.concat(results);
           if (results.some(r => r.service_match)) {
             radiusUsed = miles;
+            console.log(`Found ${results.length} matching groomers at ${miles} miles`);
             break;
           }
           if (radiusUsed === null) radiusUsed = miles;
         }
+        
+        // Add delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
       } catch (e) {
-        console.warn(`Nominatim search for ${miles} miles failed:`, e?.message || e);
+        console.warn(`Nominatim search for ${miles} miles failed:`, e?.response?.status, e?.message);
       }
     }
 
-    // Fallback: create realistic mocks with real business names + phone numbers
+    // If no results found, generate realistic mock data
     if (!foundResults.length) {
+      console.log("No real groomers found, generating mock data");
       const baseLat = center.lat;
       const baseLng = center.lng;
-      const offsets = [[0.01, 0.01], [-0.008, 0.012], [0.012, -0.009], [0.006, 0.015], [-0.013, -0.007], [0.02, 0.0], [-0.01, 0.02]];
+      const offsets = [
+        [0.01, 0.01], [-0.008, 0.012], [0.012, -0.009], 
+        [0.006, 0.015], [-0.013, -0.007], [0.02, 0.0], 
+        [-0.01, 0.02], [0.015, -0.015]
+      ];
+      
       for (let i = 0; i < Math.min(offsets.length, 8); i++) {
         const lat = baseLat + offsets[i][0];
         const lng = baseLng + offsets[i][1];
         const realName = REALISTIC_GROOMER_NAMES[i % REALISTIC_GROOMER_NAMES.length];
         foundResults.push({
           name: realName,
-          address: `${100 + i} Example St, ${center.formatted || locationString}`,
+          address: `${100 + i} Main St, ${center.formatted || locationString}`,
           place_id: null,
           lat,
           lng,
@@ -211,10 +257,10 @@ async function fetchNearbyGroomers(locationString, petType) {
         });
       }
       radiusUsed = 40;
-      console.log("Using mock groomers with realistic names (no OSM results)");
+      console.log("Generated", foundResults.length, "mock groomers");
     }
 
-    // Dedupe and sort by distance
+    // Remove duplicates
     const unique = [];
     const seen = new Set();
     for (const r of foundResults) {
@@ -225,9 +271,11 @@ async function fetchNearbyGroomers(locationString, petType) {
     }
     unique.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
 
+    console.log("Returning", unique.length, "unique groomers");
     return { groomers: unique.slice(0, 12), radiusMilesUsed: radiusUsed };
   } catch (err) {
     console.error("fetchNearbyGroomers failed:", err?.message || err);
+    console.error("Stack trace:", err?.stack);
     return { groomers: [], radiusMilesUsed: null };
   }
 }
@@ -256,25 +304,52 @@ function validatePriceInput(payload) {
   return errors;
 }
 
-// Call Ollama locally (free, no API key needed)
 async function callLLM(prompt) {
-  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "mistral";
-
+  await acquireLLMSlot();
   try {
-    console.log("Calling Ollama at:", ollamaUrl, "with model:", ollamaModel);
-    const resp = await axios.post(`${ollamaUrl}/api/generate`, {
-      model: ollamaModel,
-      prompt,
-      stream: false
-    }, { timeout: 60000 });
+    const groqApiKey = process.env.GROQ_API_KEY;
+    const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-    const text = resp.data?.response || "";
-    console.log("Ollama response received, length:", text.length);
+    if (!groqApiKey) {
+      throw new Error("GROQ_API_KEY not configured in environment");
+    }
+
+    console.log("Calling Groq AI with model:", groqModel, "(worker:", process.pid, "active:", activeLLMCalls, ")");
+    
+    const resp = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: groqModel,
+        messages: [
+          {
+            role: "system",
+            content: "You are a pet grooming pricing expert. Respond ONLY with valid JSON, no markdown formatting."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
+
+    const text = resp.data?.choices?.[0]?.message?.content || "";
+    console.log("Groq AI response received, length:", text.length);
     return text;
   } catch (err) {
-    console.error("Ollama error:", err?.message || err);
-    throw new Error("Ollama not running. Start it with: ollama serve");
+    console.error("Groq AI error:", err?.response?.data || err?.message || err);
+    throw new Error("Groq AI connection failed: " + (err?.response?.data?.error?.message || err?.message));
+  } finally {
+    releaseLLMSlot();
   }
 }
 
@@ -345,7 +420,6 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       if (m) {
         parsed = JSON.parse(m[0]);
       } else {
-        // Fallback estimate
         const baseMin = size === "tiny" || size === "small" ? 30 : size === "medium" ? 50 : 80;
         const baseMax = baseMin + 50;
         parsed = {
