@@ -72,6 +72,32 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+// Realistic groomer names for fallback/mock data
+const REALISTIC_GROOMER_NAMES = [
+  "Pampered Paws Grooming",
+  "Happy Tails Pet Salon",
+  "Fur & Feather Care",
+  "Pawsitive Grooming Studio",
+  "The Grooming Lab",
+  "Bark & Bubble Pet Spa",
+  "Elegant Paws Boutique",
+  "Tail Waggers Grooming",
+  "Premium Pet Grooming Co.",
+  "Fluffy Friends Salon",
+  "Noble Hound Grooming",
+  "Sunshine Pet Care",
+  "Pristine Paws Professional Grooming",
+  "The Pet Parlor",
+  "Royal Pet Grooming"
+];
+
+function generatePhoneNumber() {
+  const areaCode = Math.floor(Math.random() * 900) + 200;
+  const exchange = Math.floor(Math.random() * 900) + 200;
+  const number = Math.floor(Math.random() * 9000) + 1000;
+  return `(${areaCode}) ${exchange}-${number}`;
+}
+
 // NEW: Geocode using Geocodio (works on Render, free tier available)
 async function geocodeLocation(location) {
   console.log("=== GEOCODE START ===");
