@@ -32,7 +32,7 @@ Tech Stack
 
 Backend: Node.js, Express
 
-Frontend: HTML, CSS, JavaScript (Vanilla or React if applicable)
+Frontend: HTML, CSS, JavaScript, REACT 
 
 APIs: Groq AI for pricing, Google Places for real groomers
 
