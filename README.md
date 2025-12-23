@@ -1,3 +1,4 @@
+I am Danta if you are here now you are special one of the first few to view my first project into my full-stack career I hope your interest is piqued. 
 DUE TO UNFORSEEN CIRCUMSTANCES (PAID ACCESS FOR A GEOLOCIAL SERVICE) IT WILL ONLY GIVE YOU INFO ON MOCK LOCATIONS AT THE MOMENT,
 Groomly is an AI-powered pet grooming price estimator that leverages Groq AI, Google Places, and user geolocation to provide instant, accurate pricing and directions to nearby groomers. Built with full-stack integration and a focus on real-world stability and usability, Groomly showcases end-to-end development skills in a modern tech stack.
 
